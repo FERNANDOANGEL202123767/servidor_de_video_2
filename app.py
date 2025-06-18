@@ -132,7 +132,7 @@ def video():
             try:
                 with requests.get(url_video, stream=True) as r:
                     r.raise_for_status()
-                    for chunk in r.iter_content(chunk_size=8192):
+                    for chunk in r.iter_content(chunk_size=4096):
                         yield chunk
             except requests.RequestException as e:
                 print(f"Error al transmitir video: {e}")
@@ -163,7 +163,7 @@ def video():
             try:
                 with requests.get(url_video, stream=True, headers=headers) as r:
                     r.raise_for_status()
-                    for chunk in r.iter_content(chunk_size=8192):
+                    for chunk in r.iter_content(chunk_size=4096):
                         yield chunk
             except requests.RequestException as e:
                 print(f"Error al transmitir video con range: {e}")
