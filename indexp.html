@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MovieStream</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap');
+    body {
+      font-family: 'Poppins', sans-serif;
+    }
+
+    .active-server {
+      background-color: #2563eb !important;
+      color: white !important;
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+
+<!-- HEADER -->
+<header class="flex items-center justify-between bg-gray-800 p-4 border-b border-gray-700">
+  <div class="flex items-center space-x-2 text-xl font-bold text-white">
+    <svg class="w-6 h-6 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/></svg>
+    <span>MovieStream</span>
+  </div>
+  <button class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition">Logout</button>
+</header>
+
+<!-- MAIN -->
+<main class="flex-grow max-w-7xl mx-auto flex flex-col md:flex-row gap-8 px-6 py-8">
+
+  <!-- VIDEO + SERVERS + INFO -->
+  <section class="flex-1 flex flex-col space-y-6">
+
+    <!-- VIDEO PLAYER -->
+    <div class="relative rounded-lg overflow-hidden bg-black border border-gray-700 shadow-lg">
+      <video id="videoPlayer" class="w-full rounded-lg" controls preload="metadata" playsinline></video>
+      <div id="loadingOverlay" class="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <svg class="animate-spin h-16 w-16 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+      </div>
+    </div>
+
+    <!-- SERVERS -->
+    <div class="flex items-center space-x-2">
+      <span class="text-gray-300 font-medium">Servers:</span>
+      <button id="server1" class="bg-blue-600 text-white px-3 py-1 rounded-md font-semibold focus:outline-none active-server" onclick="cambiarServidorBoton('192.168.227.77:9090', this)">Server 1</button>
+      <button id="server2" class="bg-gray-700 text-white px-3 py-1 rounded-md font-semibold hover:bg-blue-500" onclick="cambiarServidorBoton('192.168.227.42:9090', this)">Server 2</button>
+      <button id="server3" class="bg-gray-700 text-white px-3 py-1 rounded-md font-semibold hover:bg-blue-500" onclick="cambiarServidorBoton('192.168.227.168:9090', this)">Server 3</button>
+    </div>
+
+    <!-- INFO PELI -->
+    <div class="space-y-2 max-w-xl">
+      <h2 id="tituloPeli" class="text-4xl font-extrabold tracking-wide"></h2>
+      <p id="descripcionPeli" class="text-gray-300 text-lg leading-relaxed"></p>
+      <p id="duracionPeli" class="italic text-blue-300 font-semibold"></p>
+    </div>
+  </section>
+
+  <!-- LISTA DE PELIS -->
+  <aside class="md:w-80 flex flex-col space-y-4 overflow-y-auto pr-2" style="max-height: calc(100vh - 150px);" id="pelisList" tabindex="0" aria-label="Lista de películas" role="list">
+    <!-- Cards cargan con JS -->
+  </aside>
+
+</main>
+
+<!-- JS -->
+<script>
+  const video = document.getElementById('videoPlayer');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  const pelisList = document.getElementById('pelisList');
+  let servidorActual = null;
+  let peliActual = null;
+  let tiempoGuardado = 0;
+  let playAfterSeek = false;
+
+  function showLoading(show) {
+    if (show) {
+      loadingOverlay.style.opacity = '1';
+      loadingOverlay.style.pointerEvents = 'auto';
+      video.classList.add('loading');
+    } else {
+      loadingOverlay.style.opacity = '0';
+      loadingOverlay.style.pointerEvents = 'none';
+      video.classList.remove('loading');
+    }
+  }
+
+  async function cargarPeliculas() {
+    showLoading(true);
+    try {
+      const res = await fetch('http://192.168.227.42:3000/pelis/listar');
+      const pelis = await res.json();
+
+      pelisList.innerHTML = '';
+
+      pelis.forEach(peli => {
+        const card = document.createElement('div');
+        card.className = "bg-gray-800 rounded-lg overflow-hidden shadow hover:ring-2 hover:ring-blue-500 cursor-pointer transition";
+
+        const imgSrc = (peli.image && peli.image !== 'iam') ? peli.image : 'https://via.placeholder.com/224x126.png?text=Sin+Imagen';
+
+        card.innerHTML = `
+          <img src="${imgSrc}" alt="${peli.titulo}" class="w-full h-40 object-cover">
+          <div class="p-3 space-y-1">
+            <h3 class="text-white font-semibold text-lg">${peli.titulo}</h3>
+            <div class="flex flex-wrap gap-1 text-xs text-gray-300">
+              <span class="bg-gray-700 px-2 py-0.5 rounded">${peli.anio || '2023'}</span>
+              ${(peli.generos || ['Género']).map(gen => `<span class="bg-gray-700 px-2 py-0.5 rounded">${gen}</span>`).join('')}
+            </div>
+          </div>
+        `;
+
+        card.onclick = () => cargarVideo(peli);
+        pelisList.appendChild(card);
+      });
+
+      const peliGuardada = localStorage.getItem('nombrePeli');
+      const peliParaCargar = pelis.find(p => p.titulo === peliGuardada) || pelis[0];
+      cargarVideo(peliParaCargar);
+
+    } catch (error) {
+      pelisList.innerHTML = `<p class="text-red-500 text-center p-6">Error cargando películas :(</p>`;
+      console.error(error);
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  function cambiarServidorBoton(ip, boton) {
+    servidorActual = ip;
+    localStorage.setItem("servidorVideo", ip);
+
+    // Guardar tiempo actual de la peli que se está viendo
+    if (peliActual) {
+      localStorage.setItem("tiempoVideo_" + peliActual.titulo, video.currentTime);
+    }
+
+    tiempoGuardado = video.currentTime;
+    playAfterSeek = true;
+
+    if (peliActual) {
+      cargarVideo(peliActual);
+    }
+
+    // Update botones
+    document.querySelectorAll('[id^="server"]').forEach(btn => {
+      btn.classList.remove('active-server');
+      btn.classList.remove('bg-blue-600');
+      btn.classList.add('bg-gray-700');
+    });
+    boton.classList.add('active-server');
+    boton.classList.remove('bg-gray-700');
+    boton.classList.add('bg-blue-600');
+  }
+
+  function cargarVideo(peli) {
+    peliActual = peli;
+    document.getElementById('tituloPeli').textContent = peli.titulo;
+    document.getElementById('descripcionPeli').textContent = peli.descripcion;
+    document.getElementById('duracionPeli').textContent = `Duración: ${peli.duracion}`;
+
+    localStorage.setItem('nombrePeli', peli.titulo);
+
+    // Cargar tiempo guardado específico de esta peli
+    tiempoGuardado = parseFloat(localStorage.getItem("tiempoVideo_" + peli.titulo)) || 0;
+
+    if (!servidorActual) {
+      servidorActual = localStorage.getItem("servidorVideo") || "192.168.227.77:9090";
+    }
+
+    showLoading(true);
+    video.classList.add('loading');
+
+    video.src = `http://${servidorActual}/video?nombre=${encodeURIComponent(peli.titulo)}`;
+    video.load();
+    playAfterSeek = true;
+  }
+
+  function iniciarVideo() {
+    servidorActual = localStorage.getItem("servidorVideo") || "192.168.227.77:9090";
+
+    video.addEventListener("loadedmetadata", () => {
+      if (tiempoGuardado < video.duration) {
+        video.currentTime = tiempoGuardado;
+      }
+      playAfterSeek = true;
+      showLoading(false);
+      video.classList.remove('loading');
+    });
+
+    video.addEventListener("canplay", () => {
+      if (playAfterSeek) {
+        video.play().catch(() => {
+          console.log("Autoplay bloqueado, requiere interacción del usuario.");
+        });
+        playAfterSeek = false;
+      }
+    });
+
+    video.addEventListener("waiting", () => {
+      showLoading(true);
+    });
+
+    video.addEventListener("playing", () => {
+      showLoading(false);
+    });
+
+    setInterval(() => {
+      if (!video.paused && peliActual) {
+        localStorage.setItem("tiempoVideo_" + peliActual.titulo, video.currentTime);
+      }
+    }, 2000);
+  }
+
+  window.onload = () => {
+    iniciarVideo();
+    cargarPeliculas();
+  };
+</script>
+
+</body>
+</html>
