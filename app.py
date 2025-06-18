@@ -26,6 +26,7 @@ db = client[DB_NAME]
 collection = db[COLLECTION_NAME]
 
 app = Flask(__name__)
+Compress(app)
 CORS(app, resources={r"/*": {"origins": "https://fon-yogm.onrender.com"}})
 
 def get_drive_service():
