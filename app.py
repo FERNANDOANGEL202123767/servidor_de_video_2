@@ -11,6 +11,7 @@ import mimetypes
 import re
 import base64
 import requests
+from flask_compress import Compress
 
 # Cargar variables de entorno
 load_dotenv()
